@@ -14,22 +14,22 @@ Topologia = os.path.join(_DIR_BASE, "topologia.json")
 #do enunciado: trocar a rede so trocando o JSON).
 
 def _normalizar_interfaces(bruto):
-    
-    if isinstance(bruto["interface"], str):
+
+    if bruto["type"] == "HOST":
         return [{
-            "interface": bruto["interface"],
-            "IPv4": bruto["IPv4"],
-            "fisico": bruto["Physical Address"],
+            "dispositivo": bruto["name"],
+            "IPv4": bruto["ip"],
+            "fisico": bruto["phys-addr"],
         }]
 
     interfaces = []
-    for i, iface in enumerate(bruto["interface"]):
+    for i, iface in enumerate(bruto["ports"]):
         interfaces.append({
-            "interface": iface[""],
+            "dispositivo": iface["name"],
             "info": iface.get("info", ""),
-            "custo": iface.get("custo"),
-            "IPv4": bruto["IPv4"][i][""],
-            "fisico": bruto["Physical Address"][i][""],
+            "custo": iface.get("cost"),
+            "IPv4": bruto["ip"],
+            "fisico": bruto["phys-addr"],
         })
     return interfaces
 

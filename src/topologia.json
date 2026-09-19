@@ -1,185 +1,157 @@
 [
 	{
-		"dispositivo": "H1",
+		"name": "H1",
+		"type": "HOST",
 		"interface": "eth0",
-		"IPv4": "10.0.1.10",
-		"Physical Address": "AA:00:00:00:01:0A"
+		"ip": "10.0.1.10",
+		"phys-addr": "AA:00:00:00:01:0A"
 	},
 	{
-		"dispositivo": "H2",
+		"name": "H2",
+		"type": "HOST",
 		"interface": "eth0",
-		"IPv4": "10.0.1.11",
-		"Physical Address": "AA:00:00:00:01:0B"
+		"ip": "10.0.1.11",
+		"phys-addr": "AA:00:00:00:01:0B"
 	},
 	{
-		"dispositivo": "H3",
+		"name": "H3",
+		"type": "HOST",
 		"interface": "eth0",
-		"IPv4": "10.0.2.10",
-		"Physical Address": "AA:00:00:00:02:0A"
+		"ip": "10.0.2.10",
+		"phys-addr": "AA:00:00:00:02:0A"
 	},
 	{
-		"dispositivo": "H4",
+		"name": "H4",
+		"type": "HOST",
 		"interface": "eth0",
-		"IPv4": "10.0.3.10",
-		"Physical Address": "AA:00:00:00:03:0A"
+		"ip": "10.0.3.10",
+		"phys-addr": "AA:00:00:00:03:0A"
 	},
 	{
-		"dispositivo": "H5",
+		"name": "H5",
+		"type": "HOST",
 		"interface": "eth0",
-		"IPv4": "10.0.3.11",
-		"Physical Address": "AA:00:00:00:03:0B"
+		"ip": "10.0.3.11",
+		"phys-addr": "AA:00:00:00:03:0B"
 	},
 	{
-		"dispositivo": "R1",
-		"interface": [
+		"name": "R1",
+		"type": "ROUTER",
+		"mask": "10.0.1.0/24",
+		"ports": [
 			{
-				"": "e0",
-				"info": "Rede A"
+				"name": "e0",
+				"type": "NETWORK",
+				"info": "Rede A",
+				"ip": "10.0.1.1",
+				"phys-addr": "BB:00:00:00:01:00"
 			},
 			{
-				"": "e1",
+				"name": "e1",
+				"type": "R2R",
 				"info": "para R4",
-				"custo": 1
+				"cost": 1,
+				"ip": "10.0.14.1",
+				"topnet": "10.0.4.0/24",
+				"phys-addr": "BB:00:00:00:01:01"
 			},
 			{
-				"": "e2",
+				"name": "e2",
+				"type": "R2R",
 				"info": "para R2",
-				"custo": 1
-			}
-		],
-		"IPv4": [
-			{
-				"": "10.0.1.1"
-			},
-			{
-				"": "10.0.14.1"
-			},
-			{
-				"": "10.0.12.1"
-			}
-		],
-		"Physical Address": [
-			{
-				"": "BB:00:00:00:01:00"
-			},
-			{
-				"": "BB:00:00:00:01:01"
-			},
-			{
-				"": "BB:00:00:00:01:02"
+				"cost": 1,
+				"ip": "10.0.12.1",
+				"topnet": "10.0.2.0/24",
+     	  "phys-addr": "BB:00:00:00:01:02"
 			}
 		]
 	},
 	{
-		"dispositivo": "R2",
-		"interface": [
+		"name": "R2",
+		"type": "ROUTER",
+		"mask": "10.0.2.0/24",
+		"ports": [
 			{
-				"": "e0",
+				"name": "e0",
+				"type": "R2R",
 				"info": "para R1",
-				"custo": 1
+				"cost": 1,
+				"ip": "10.0.12.2",
+				"topnet": "10.0.1.0/24",
+				"phys-addr": "BB:00:00:00:02:00"
 			},
 			{
-				"": "e1",
+				"name": "e1",
+				"type": "R2R",
 				"info": "para R3",
-				"custo": 2
+				"cost": 2,
+				"ip": "10.0.23.2",
+				"topnet": "10.0.3.0/24",
+				"phys-addr": "BB:00:00:00:02:01"
 			},
 			{
-				"": "e2",
-				"info": "Rede B"
-			}
-		],
-		"IPv4": [
-			{
-				"": "10.0.12.2"
-			},
-			{
-				"": "10.0.23.2"
-			},
-			{
-				"": "10.0.2.1"
-			}
-		],
-		"Physical Address": [
-			{
-				"": "BB:00:00:00:02:00"
-			},
-			{
-				"": "BB:00:00:00:02:01"
-			},
-			{
-				"": "BB:00:00:00:02:02"
+				"name": "e2",
+				"type": "NETWORK",
+				"info": "Rede B",
+				"ip": "10.0.2.1",
+				"phys-addr": "BB:00:00:00:02:02"
 			}
 		]
 	},
 	{
-		"dispositivo": "R3",
-		"interface": [
+		"name": "R3",
+		"type": "ROUTER",
+		"mask": "10.0.3.0/24",
+		"ports": [
 			{
-				"": "e0",
+				"name": "e0",
+				"type": "R2R",
 				"info": "para R4",
-				"custo": 1
+				"cost": 1,
+				"ip": "10.0.34.3",
+				"topnet": "10.0.4.0/24",
+				"phys-addr": "BB:00:00:00:03:00"
 			},
 			{
-				"": "e1",
+				"name": "e1",
+				"type": "R2R",
 				"info": "para R2",
-				"custo": 2
+				"cost": 2,
+				"ip": "10.0.23.3",
+				"topnet": "10.0.2.0/24",
+				"phys-addr": "BB:00:00:00:03:01"
 			},
 			{
-				"": "e2",
-				"info": "Rede C"
-			}
-		],
-		"IPv4": [
-			{
-				"": "10.0.34.3"
-			},
-			{
-				"": "10.0.23.3"
-			},
-			{
-				"": "10.0.3.1"
-			}
-		],
-		"Physical Address": [
-			{
-				"": "BB:00:00:00:03:00"
-			},
-			{
-				"": "BB:00:00:00:03:01"
-			},
-			{
-				"": "BB:00:00:00:03:02"
+				"name": "e2",
+				"type": "NETWORK",
+				"info": "Rede C",
+				"ip": "10.0.3.1",
+				"phys-addr": "BB:00:00:00:03:02"
 			}
 		]
 	},
 	{
-		"dispositivo": "R4",
-		"interface": [
+		"name": "R4",
+		"type": "ROUTER",
+		"mask": "10.0.4.0/24",
+		"ports": [
 			{
-				"": "e0",
+				"name": "e0",
+				"type": "R2R",
 				"info": "para R1",
-				"custo": 1
+				"cost": 1,
+				"ip": "10.0.14.4",
+				"topnet": "10.0.1.0/24",
+				"phys-addr": "BB:00:00:00:04:00"
 			},
 			{
-				"": "e1",
+				"name": "e1",
+				"type": "R2R",
 				"info": "para R3",
-				"custo": 1
-			}
-		],
-		"IPv4": [
-			{
-				"": "10.0.14.4"
-			},
-			{
-				"": "10.0.34.4"
-			}
-		],
-		"Physical Address": [
-			{
-				"": "BB:00:00:00:04:00"
-			},
-			{
-				"": "BB:00:00:00:04:01"
+				"cost": 1,
+				"ip": "10.0.34.4",
+				"topnet": "10.0.3.0/24",
+				"phys-addr": "BB:00:00:00:04:01"
 			}
 		]
 	}
