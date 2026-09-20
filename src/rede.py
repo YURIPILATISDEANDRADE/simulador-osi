@@ -69,7 +69,6 @@ class Rede:
                 return i
         if disp.tipo == "host":
             return disp.interfaces[0]
-        # saída para host da LAN
         alvo=self.dispositivo(proximo)
         if alvo and alvo.tipo=="host":
             pref=".".join(alvo.interfaces[0]["ip"].split(".")[:3])
