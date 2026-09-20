@@ -8,3 +8,4 @@ class Computador(Dispositivo):
 
 class Roteador(Dispositivo):
     tipo = "roteador"
+    # Intencionalmente sem qualquer estado/método de L4-L7 (R1).

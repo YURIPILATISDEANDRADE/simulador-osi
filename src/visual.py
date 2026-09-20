@@ -61,6 +61,7 @@ class GUI:
             fill="#d9ecff" if n.startswith("H") else "#ffe0e0"
             o=self.canvas.create_oval(x-22,y-22,x+22,y+22,fill=fill,outline="#333",width=2)
             self.canvas.create_text(x,y,text=n,font=("Segoe UI",9,"bold")); self.nos[n]=o
+        # interfaces visíveis simultaneamente
         for nome,disp in self.sim.rede.dispositivos.items():
             x,y=self.coords[nome]
             txt=" / ".join(i["nome"] for i in disp.interfaces)
