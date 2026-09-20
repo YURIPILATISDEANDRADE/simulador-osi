@@ -5,8 +5,6 @@ import re
 
 from typing_extensions import override
 
-#See https://mermaid.js.org/syntax/flowchart.html for more info
-
 class Output:
     def __init__(self) -> None:
         self.context = dict[str, dict]()
@@ -16,7 +14,6 @@ class Output:
     def write(self, what: str):
         pass
 
-# Represents a network node.
 class Node:
     _uuid = 0
 
@@ -39,12 +36,11 @@ class Node:
 
     @abstractmethod
     def connect(self, other) -> None:
-        pass #away
+        pass 
 
     @abstractmethod
     def display(self, out: Output) -> None:
-        #self.debug()
-        pass #away
+        pass 
 
     def debug(self) -> None:
         print(self)
@@ -69,7 +65,6 @@ class Node:
             if i.find('/') != -1:
                 i = i.split('/')[0]
             ipx.append(f"{int(i):b}".rjust(8, "0"))
-        # Ignore this horror, please
         return ".".join([str(int(x, 2) if x != "" else "0") for x in re.sub("([0-9]{0,8})", "\\1.", "".join(ipx)[0:size])[0:-1].split(".")])
 
 class Network(Node):
@@ -197,7 +192,7 @@ class IOWriter(Output):
     @override
     def write(self, what: str):
         print(what)
-        pass #away
+        pass 
 
 class Mapper:
     @staticmethod
