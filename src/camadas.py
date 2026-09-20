@@ -1,199 +1,81 @@
-from pdu import *
-from rede import *
+from pdu import PDU, TAM_C5, TAM_C4, TAM_C3, TAM_C2
+import itertools
 
-# Camada 7
-# Gerar a mensagem e identificar o
-# processo pelo nome (endereço específico).
-class Lay_7:
-    @staticmethod
-    def criar_mens(computador, mensagem, destino_nome, processo_origem=None, processo_destino=None):
-        pdu = PDU(mensagem, destino_nome, processo_origem, processo_destino)
-        pdu.origem_nome = computador.nome
-        print(f'[{computador.nome}] L7 GERA: destino -> {destino_nome}')
-        return Lay_6.criptografar(computador, pdu)
+def xor_bytes(data, chave=0x5A):
+    return bytes(b ^ chave for b in data)
 
-    @staticmethod
-    def receb_mens(computador, pdu):
-        print(f'[{pdu.destino_nome}] L7 ENTREGA: receber -> {computador.nome}')
-        print(f'[{pdu.destino_nome}] MENSAGEM DO {computador.nome} -> {pdu.dados}\n')
-        return pdu
+class PilhaOSI:
+    LIMITE_SEGMENTO = 40
+    _sessao = itertools.count(1)
+    _quadro = itertools.count(1)
 
-# Camada 6
-# Converter texto em sequência de octetos, registrar o esquema de codificação 
-# e cifrar o conteúdo, que só é decifrado na camada 6 do destino.
-class Lay_6:
-    @staticmethod
-    def criptografar(computador, pdu):
-        pdu.dados = pdu.dados.encode('utf-8')
-        print(f'[{computador.nome}] L6 CODIFICA: octetos UTF-8, conteudo cifrado')
-        return Lay_5.abrirCom(computador, pdu)
+    def __init__(self, simulador):
+        self.s = simulador
 
-    @staticmethod
-    def descriptografar(computador, pdu):
-        pdu.dados = pdu.dados.decode('utf-8')
-        print(f'[{computador.nome}] L6 DECODIFICA: octetos UTF-8, conteudo decifrado')
-        return Lay_7.receb_mens(computador, pdu)
+    def enviar(self, origem, destino, mensagem, porta_origem=5210, porta_destino=443):
+        p=PDU(mensagem,destino,porta_origem,porta_destino); p.origem_nome=origem
+        self.s.ev(origem,7,"GERA",f"processo navegador, destino servidorWeb",p)
+        p.dados=xor_bytes(p.dados); p.cifrado=True
+        self.s.ev(origem,6,"CODIFICA","octetos UTF-8, conteúdo cifrado XOR",p)
+        p.sessao_id=f"S-{next(self._sessao):04d}"; p.adicionar_cabecalho("L5",TAM_C5)
+        self.s.ev(origem,5,"ABRE",f"sessão {p.sessao_id} estabelecida",p)
 
-# Camada 5
-# Abrir, manter e encerrar o diálogo,
-# atribuindo um identificador de sessão.
-class Lay_5:
-    _contador_sessao = 0
+        fatias=[p.dados[i:i+self.LIMITE_SEGMENTO] for i in range(0,len(p.dados),self.LIMITE_SEGMENTO)] or [b""]
+        total=len(fatias)
+        for idx,fatia in enumerate(fatias,1):
+            seg=p.clonar_para_segmento(fatia,idx,total)
+            seg.portas=(porta_origem,porta_destino); seg.adicionar_cabecalho("L4",TAM_C4)
+            self.s.ev(origem,4,"SEGMENTA",f"porta {porta_origem} → {porta_destino}, segmento {idx} de {total}",seg)
+            self._transportar_segmento(seg)
 
-    @staticmethod
-    def abrirCom(computador, pdu):
-        Lay_5._contador_sessao += 1
-        pdu.sessao_id = f"S-{Lay_5._contador_sessao:04d}"
-        print(f'[{computador.nome}] L5 ABRE: sessao {pdu.sessao_id} estabelecida')
-        return Lay_4.segmentar(computador, pdu)
+    def _transportar_segmento(self,p):
+        caminho,custo=self.s.rede.caminho_comunicacao(p.origem_nome,p.destino_nome)
+        if not caminho:
+            self.s.ev(p.origem_nome,3,"DESCARTA",f"destino {p.destino_nome} inalcançável",p)
+            return
+        ip_o=self.s.rede.dispositivo(p.origem_nome).interfaces[0]["ip"]
+        ip_d=self.s.rede.dispositivo(p.destino_nome).interfaces[0]["ip"]
+        p.logicos=(ip_o,ip_d); p.adicionar_cabecalho("L3",TAM_C3); p.unidade="pacote"
+        self.s.ev(p.origem_nome,3,"ENCAPSULA",f"{ip_o} → {ip_d}",p,caminho=caminho)
+        if len(caminho)>2:
+            self.s.ev(p.origem_nome,3,"ROTEIA",f"próximo salto {caminho[1]}; caminho {' → '.join(caminho)}, custo {custo}",p,caminho=caminho)
+        else:
+            self.s.ev(p.origem_nome,3,"ROTEIA",f"entrega direta para {p.destino_nome}",p,caminho=caminho)
 
-    @staticmethod
-    def encerrarCom(computador, pdu):
-        print(f'[{computador.nome}] L5 FECHA: sessao {pdu.sessao_id} encerrada')
-        return Lay_6.descriptografar(computador, pdu)
+        for salto in range(len(caminho)-1):
+            atual,prox=caminho[salto],caminho[salto+1]
+            ia,ib=self.s.rede.par_interfaces(atual,prox)
+            p.fisicos=(ia["mac"],ib["mac"]); p.quadro_id=f"Q{next(self._quadro)}"
+            p.adicionar_cabecalho("L2",TAM_C2); p.tem_trailer_l2=True; p.unidade="quadro"
+            p.verificacao=sum(p.dados)%256
+            self.s.ev(atual,2,"ENQUADRA",f"{p.fisicos[0]} → {p.fisicos[1]}, quadro {p.quadro_id}",p,caminho=caminho)
+            self.s.ev(atual,1,"TRANSMITE",f"{p.tamanho_atual()*8} bits no enlace {atual}–{prox}",p,caminho=caminho)
+            self.s.total_transmitido += p.tamanho_atual()
+            if self.s.erro_enlace == (atual,prox):
+                if p.dados: p.dados=bytes([p.dados[0]^1])+p.dados[1:]
+                self.s.erro_enlace=None
+                self.s.ev(atual,1,"ERRO",f"1 bit alterado no enlace {atual}–{prox}",p,caminho=caminho)
+            self.s.ev(prox,1,"RECEBE",f"{p.tamanho_atual()*8} bits do enlace {atual}–{prox}",p,caminho=caminho)
+            if sum(p.dados)%256 != p.verificacao:
+                self.s.ev(prox,2,"DESCARTA",f"verificação de erro falhou; quadro {p.quadro_id} descartado",p,caminho=caminho)
+                return
+            p.remover_cabecalho("L2"); p.tem_trailer_l2=False; p.unidade="pacote"
+            self.s.ev(prox,2,"DESENQUADRA",f"verificação correta; quadro {p.quadro_id} descartado",p,caminho=caminho)
+            if prox != p.destino_nome:
+                # Roteador só interpreta L3.
+                seguinte=caminho[salto+2]
+                self.s.ev(prox,3,"ROTEIA",f"{p.logicos[1]} via {seguinte}; decisão na camada 3",p,caminho=caminho)
 
-# Camada 4
-#Numerar portas de origem e destino,
-#segmentar a mensagem em pelo menos
-#três segmentos numerados quando ela
-#exceder o limite adotado, e remontá-los
-#em ordem na camada 4 do destino
-class Lay_4:
+        p.remover_cabecalho("L3"); p.unidade="segmento"
+        self.s.ev(p.destino_nome,3,"ENTREGA","pacote chegou ao destino final",p,caminho=caminho)
+        self.s.receber_segmento(p)
 
-    LENGTH_LIMIT = 40
-    _buffer_remontagem = {}
-
-    @staticmethod
-    def segmentar(computador, pdu):
-        pdu.portas = (pdu.processo_origem, pdu.processo_destino)
-        pdu.unidade = "segmento"
-
-        if len(pdu.dados) <= Lay_4.LENGTH_LIMIT:
-            pdu.segmento_indice = 1
-            pdu.segmento_total = 1
-            print(f'[{computador.nome}] L4 SEGMENTA: porta {pdu.processo_origem} -> {pdu.processo_destino}, '
-                    f'segmento 1 de 1 ({len(pdu.dados)} B)')
-            return Lay_3.encaminhar(computador, pdu)
-
-        fatias = [pdu.dados[i:i + Lay_4.LENGTH_LIMIT] for i in range(0, len(pdu.dados), Lay_4.LENGTH_LIMIT)]
-        total = len(fatias)
-        resultado = None
-        for indice, fatia in enumerate(fatias, start=1):
-            segmento = pdu.clonar_para_segmento(fatia, indice, total)
-            print(f'[{computador.nome}] L4 SEGMENTA: porta {pdu.processo_origem} -> {pdu.processo_destino}, '
-                    f'segmento {indice} de {total} ({len(fatia)} B)')
-            resultado = Lay_3.encaminhar(computador, segmento)
-        return resultado
-    
-    @staticmethod
-    def remontar(computador, pdu):
-        total = pdu.segmento_total or 1
-
-        if total == 1:
-            print(f'[{computador.nome}] L4 REMONTA: porta {pdu.portas[1]}, segmento unico recebido')
-            return Lay_5.encerrarCom(computador, pdu)
-        
-        chave_fluxo = (pdu.logicos[0], pdu.portas[0], pdu.portas[1])  # (IP origem, porta origem, porta destino) - o "socket" da camada 4
-        buffer = Lay_4._buffer_remontagem.setdefault(chave_fluxo, [])
-        buffer.append((pdu.segmento_indice, pdu.dados))
-        print(f'[{computador.nome}] L4 REMONTA: segmento {pdu.segmento_indice} de {total} recebido '
-              f'de {pdu.logicos[0]}:{pdu.portas[0]} ({len(buffer)}/{total})')
-
-        if len(buffer) < total:
-            return None  # ainda faltam segmentos deste fluxo: so sobe quando tiver todos
-
-        buffer.sort(key=lambda par: par[0])
-        pdu.dados = b"".join(fatia for _, fatia in buffer)
-        del Lay_4._buffer_remontagem[chave_fluxo]
-        print(f'[{computador.nome}] L4 REMONTA: {total} segmentos reordenados, fluxo '
-              f'{pdu.logicos[0]}:{pdu.portas[0]}->{pdu.portas[1]} completo')
-        return Lay_5.encerrarCom(computador, pdu)
-
-# Camada 3
-# Inserir o par de endereços lógicos e
-# consultar a tabela de encaminhamento.
-class Lay_3:
-    @staticmethod
-    def encaminhar(dispositivo, pdu):
-        proximo, iface_saida, iface_entrada = proximo_salto(dispositivo, pdu.destino_nome)
-        if proximo is None:
-            print(f'[{dispositivo.nome}] L3 DESCARTA: destino {pdu.destino_nome} inalcancavel')
-            return None
-
-        if pdu.logicos is None:
-            pdu.logicos = (dispositivo.interfaces[0]["IPv4"], ip_de(pdu.destino_nome))
-            pdu.unidade = "pacote"
-
-        pdu.proximo_dispositivo = proximo
-        pdu.iface_saida = iface_saida
-        pdu.iface_entrada = iface_entrada
-        print(f'[{dispositivo.nome}] L3 ENCAPSULA/ROTEIA: {pdu.logicos} -> proximo salto {proximo.nome}')
-        return Lay_2.enquadrar(dispositivo, pdu)
-
-    @staticmethod
-    def receber(dispositivo, pdu):
-        pdu.unidade = "pacote"
-        if dispositivo.nome == pdu.destino_nome:
-            print(f'[{dispositivo.nome}] L3 ENTREGA: pacote chegou ao destino final')
-            return Lay_4.remontar(dispositivo, pdu)
-        print(f'[{dispositivo.nome}] L3 REPASSA: nao sou o destino, continuo roteando')
-        return Lay_3.encaminhar(dispositivo, pdu)
-
-
-# Camada 2
-# Inserir o par de endereços físicos do salto,
-# delimitar o quadro e calcular a
-# verificação de erro.
-class Lay_2:
-    _contador_quadro = 0
-
-    @staticmethod
-    def enquadrar(dispositivo, pdu):
-        pdu.unidade = "quadro"
-        mac_origem = pdu.iface_saida["fisico"]
-        mac_destino = pdu.iface_entrada["fisico"]
-        pdu.fisicos = (mac_origem, mac_destino)
-        Lay_2._contador_quadro += 1
-        pdu.quadro_id = f"Q{Lay_2._contador_quadro}"
-        pdu.verificacao = sum(pdu.dados) % 256
-        print(f'[{dispositivo.nome}] L2 ENQUADRA: {mac_origem} -> {mac_destino}, quadro {pdu.quadro_id}')
-        return Lay_1.transmitir(dispositivo, pdu)
-
-    @staticmethod
-    def desenquadrar(dispositivo, pdu):
-        pdu.unidade = "pacote"
-        if sum(pdu.dados) % 256 != pdu.verificacao:
-            print(f'[{dispositivo.nome}] L2 DESCARTA: quadro {pdu.quadro_id} corrompido (verificacao de erro falhou)')
-            return None  # R2/C6: nenhuma camada superior e acionada com quadro corrompido
-        print(f'[{dispositivo.nome}] L2 DESENQUADRA: quadro {pdu.quadro_id} descartado')
-        return Lay_3.receber(dispositivo, pdu)
-
-    
-    
-# Camada 1
-# Converter o quadro em uma sequência de
-# bits e transportá-la pelo enlace 
-class Lay_1:
-
-    #Inverte o bit menos significativo do primeiro octeto - o
-    #suficiente para violar a verificacao de erro da camada 2 (C6).
-    @staticmethod
-    def _corromper_um_bit(dados):
-        corrompidos = bytearray(dados)
-        if corrompidos:
-            corrompidos[0] ^= 0b00000001
-        return bytes(corrompidos)
-
-    @staticmethod
-    def transmitir(dispositivo, pdu):
-        print(f'[{dispositivo.nome}] L1 TRANSMITE: {pdu.quadro_id} ({len(pdu.dados) if hasattr(pdu.dados, "__len__") else "?"} B)')
-        proximo = pdu.proximo_dispositivo
-        if consumir_erro_pendente(dispositivo.nome, proximo.nome):
-            pdu.dados = Lay_1._corromper_um_bit(pdu.dados)
-            print(f'[{dispositivo.nome}] L1 ERRO INJETADO: 1 bit alterado no enlace {dispositivo.nome}-{proximo.nome}')
-        return Lay_1.receber(proximo, pdu)
-
-    @staticmethod
-    def receber(dispositivo, pdu):
-        print(f'[{dispositivo.nome}] L1 RECEBE')
-        return Lay_2.desenquadrar(dispositivo, pdu)
+    def finalizar_recebimento(self,p):
+        p.remover_cabecalho("L4")
+        self.s.ev(p.destino_nome,4,"REMONTA",f"fluxo {p.logicos[0]}:{p.portas[0]} → {p.portas[1]} completo",p)
+        p.remover_cabecalho("L5")
+        self.s.ev(p.destino_nome,5,"FECHA",f"sessão {p.sessao_id} encerrada",p)
+        p.dados=xor_bytes(p.dados); p.cifrado=False
+        self.s.ev(p.destino_nome,6,"DECODIFICA","conteúdo decifrado e UTF-8 restaurado",p)
+        texto=p.dados.decode("utf-8",errors="replace")
+        self.s.ev(p.destino_nome,7,"ENTREGA",f"processo servidorWeb recebeu: {texto}",p)
